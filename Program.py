@@ -135,10 +135,11 @@ DEPARTMENT_HEADER_ROWS_SIZE = 5
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Словарь, сопоставляющий названия столбцов файла баллов их буквенным индексам.
-# Файл баллов содержит данные о прохождении тестов студентами:
-#   группа, ФИО, Фамилия, Имя, Отчетсво, дисциплина полученный балл, время начала и конца попытки.
+# Файл баллов содержит данные о прохождении тестов студентами.
+# Структура обновлена: ФИО теперь разбито на три отдельных столбца,
+# добавлен столбец с названием теста, дисциплина и балл сдвинулись правее.
 
-# Старый словаь
+# Старая структура файла баллов (оставлена для справки)
 # POINTS_COLUMNS = {
 #     "группа": "A",
 #     "ФИО": "B",
@@ -161,7 +162,6 @@ POINTS_COLUMNS = {
     "конец попытки": "J"
 }
 
-
 # Названия ключевых столбцов файла баллов
 POINTS_GROUP_HEADER_NAME = "группа"
 POINTS_DISCIPLINE_HEADER_NAME = "дисциплина"
@@ -182,7 +182,8 @@ POINTS_HEADER_ROWS_SIZE = 1
 
 # Словарь, сопоставляющий названия столбцов итогового файла их буквенным индексам.
 # Первые 8 столбцов (A–H) переносятся из файла кафедры без изменений.
-# Столбцы I и J ("Количество прохождений", "Средний балл") рассчитываются по данным из файлов баллов.
+# Столбцы I и J ("Количество прохождений", "Средний балл") рассчитываются
+# по данным из файлов баллов.
 OUTPUT_COLUMNS = {
     "Учебный план": "A",
     "Факультет группы": "B",
@@ -192,8 +193,8 @@ OUTPUT_COLUMNS = {
     "Количество студентов": "F",
     "Вид занятий": "G",
     "Преподаватель": "H",
-    "Количество прохождений": "I",       # Количество студентов, сдавших тест (из файла баллов)
-    "Средний балл": "J"       # Средний балл по группе для данной дисциплины
+    "Количество прохождений": "I",  # Заполняется из файла баллов
+    "Средний балл": "J"             # Считается как среднее по всем баллам группы
 }
 
 OUTPUT_PASSED_HEADER_NAME = "Количество прохождений"
@@ -228,18 +229,17 @@ PATTERN = r"(?:,\s*п/г\s*\d+)?(?:,\s*часть\s*\d+)?$"
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # def save_to_json(data, file_path: str | pathlib.Path, indent: int = 2):
-#     r"""
-#     Cохраняет произвольные данные (словарь, список и т.д.) в JSON-файл.
-
-#     Особенности:
-#     - Автоматически создаёт все недостающие родительские директории.
-#     - Кириллица сохраняется как есть (ensure_ascii=False), не в виде '\uXXXX.
-#     - Ключи сортируются по алфавиту для удобного сравнения файлов.
-#     - Отступы задаются параметром indent (по умолчанию 2 пробела).
-
+#     """
+#     Сохраняет произвольные данные (словарь, список и т.д.) в JSON-файл.
 #     Используется преимущественно для отладки: позволяет сохранить
 #     промежуточный словарь departments_dict и просмотреть его структуру.
-
+#
+#     Особенности:
+#     - Автоматически создаёт все недостающие родительские директории.
+#     - Кириллица сохраняется как есть (ensure_ascii=False), не в виде \uXXXX.
+#     - Ключи сортируются по алфавиту для удобного сравнения файлов.
+#     - Отступы задаются параметром indent (по умолчанию 2 пробела).
+#
 #     Параметры:
 #         data      — данные для сериализации
 #         file_path — путь к выходному файлу (str или pathlib.Path)
@@ -247,7 +247,6 @@ PATTERN = r"(?:,\s*п/г\s*\d+)?(?:,\s*часть\s*\d+)?$"
 #     """
 #     file_path = pathlib.Path(file_path)
 #     file_path.parent.mkdir(parents=True, exist_ok=True)
-
 #     with open(file_path, 'w', encoding='utf-8') as f:
 #         json.dump(
 #             data,
@@ -262,17 +261,7 @@ PATTERN = r"(?:,\s*п/г\s*\d+)?(?:,\s*часть\s*\d+)?$"
 def to_float(value: str | float | int):
     """
     Безопасно преобразует значение к типу float.
-
-    Обрабатывает три случая:
-    - str: заменяет запятую на точку (для формата "3,14") и проверяет,
-      является ли результат числом. Если нет — возвращает None неявно.
-    - float: возвращает как есть.
-    - int: приводит к float.
-
-    Пример:
-        to_float("3,14") → 3.14
-        to_float(5)      → 5.0
-        to_float("abc")  → None
+    Поддерживает строки с запятой как десятичным разделителем (например, "3,14").
 
     Параметры:
         value — строка, число с плавающей точкой или целое число
@@ -294,15 +283,7 @@ def to_float(value: str | float | int):
 def to_int(value: str | int):
     """
     Безопасно преобразует значение к типу int.
-
-    Обрабатывает два случая:
-    - str: проверяет, состоит ли строка только из цифр. Если нет — None неявно.
-    - int: возвращает как есть.
-
-    Пример:
-        to_int("42")  → 42
-        to_int(10)    → 10
-        to_int("3.5") → None
+    Работает только с целыми числами: дробные строки вроде "3.5" вернут None.
 
     Параметры:
         value — строка или целое число
@@ -317,7 +298,7 @@ def to_int(value: str | int):
 
 
 def recreate_work_folder(output_folder_name):
-    '''
+    """
     Пересоздаёт папку по указанному пути: удаляет её вместе со всем содержимым
     (если существует), затем создаёт заново пустой.
 
@@ -329,7 +310,7 @@ def recreate_work_folder(output_folder_name):
 
     Возвращает:
         pathlib.Path — объект созданной папки
-    '''
+    """
     if pathlib.Path(output_folder_name).exists():
         shutil.rmtree(output_folder_name)  # Удаляем папку рекурсивно
 
@@ -348,10 +329,10 @@ def remove_suffixes(text: str, pattern: str) -> str:
     все варианты одной дисциплины к единому виду для последующего сравнения.
 
     Например:
-        "Математика, п/г 1"       → "Математика"
-        "Физика, часть 2"         → "Физика"
-        "Химия, п/г 1, часть 2"   → "Химия"
-        "История"                  → "История"  (без изменений)
+        "Математика, п/г 1"     → "Математика"
+        "Физика, часть 2"       → "Физика"
+        "Химия, п/г 1, часть 2" → "Химия"
+        "История"               → "История"  (без изменений)
 
     После удаления суффикса дополнительно обрезаются лишние запятые и пробелы
     в конце строки с помощью второго re.sub.
@@ -366,19 +347,19 @@ def remove_suffixes(text: str, pattern: str) -> str:
     if not text or not isinstance(text, str):
         return text  # Защита от None и нестроковых значений
 
-    cleaned = re.sub(pattern, "", text)               # Удаляем суффиксы по шаблону
-    cleaned = re.sub(r"[,\s]+$", "", cleaned)          # Убираем хвостовые запятые/пробелы
+    cleaned = re.sub(pattern, "", text)         # Удаляем суффиксы по шаблону
+    cleaned = re.sub(r"[,\s]+$", "", cleaned)   # Убираем хвостовые запятые/пробелы
 
-    return cleaned.strip()                             # Финальная очистка от пробелов по краям
+    return cleaned.strip()                      # Финальная очистка от пробелов по краям
 
 
 def end_check(text: str, pattern: str) -> bool:
-    r"""
+    """
     Проверяет, оканчивается ли строка на подстроку, соответствующую шаблону.
 
     Используется для определения типа суффикса в названии дисциплины:
-    - r"[,\s]*п/г\\s*\d+$"        — строка оканчивается на обозначение подгруппы
-    - r"часть(?:_к)?\s*\d+$"     — строка оканчивается на обозначение части
+    - r"[,\s]*п/г\s*\d+$"    — строка оканчивается на обозначение подгруппы
+    - r"часть(?:_к)?\s*\d+$" — строка оканчивается на обозначение части
 
     Это позволяет принять решение: нужно ли объединять две строки кафедры
     как подгруппы одной и той же дисциплины или как части одной дисциплины.
@@ -401,7 +382,7 @@ def end_check(text: str, pattern: str) -> bool:
 # ФУНКЦИИ ПОДГОТОВКИ ДАННЫХ
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def preparation_of_departments(departments_name : str, work_folder_name=WORK_FOLDER, output_folder_name=DEPARTMENTS_FOLDER) -> int:
+def preparation_of_departments(departments_name: str, work_folder_name=WORK_FOLDER, output_folder_name=DEPARTMENTS_FOLDER) -> int:
     """
     Подготавливает файлы кафедр к обработке: копирует .xlsx-файлы
     и конвертирует .xls-файлы в .xlsx, помещая результат в DEPARTMENTS_FOLDER.
@@ -513,31 +494,35 @@ def preparation_of_departments(departments_name : str, work_folder_name=WORK_FOL
     return 0
 
 
-def preparation_of_points(autumn_points_name : str, spring_points_name : str, work_folder_name=WORK_FOLDER, output_folder_name=POINTS_FOLDER) -> int:
+def preparation_of_points(autumn_points_name: str, spring_points_name: str, work_folder_name=WORK_FOLDER, output_folder_name=POINTS_FOLDER) -> int:
     """
     Подготавливает файлы баллов к обработке: копирует осенний и весенний
     файлы в рабочую папку POINTS_FOLDER под стандартизированными именами.
 
     Принимает только .xlsx-файлы. Если передан файл другого формата — ошибка.
+    Каждый из двух файлов можно пропустить, оставив поле ввода пустым.
+    Однако хотя бы один файл должен быть указан — иначе обрабатывать нечего.
 
     Перед копированием проверяет:
     1. Существование родительской рабочей папки (WORK_FOLDER).
-    2. Существование обоих файлов-источников.
-    3. Расширение обоих файлов (.xlsx).
+    2. Существование указанных файлов-источников.
+    3. Расширение указанных файлов (.xlsx).
 
     Коды возврата:
         0 — успех
-        1 — один из файлов не существует
+        1 — один из указанных файлов не существует
         3 — неверный тип файла (не .xlsx)
         4 — родительская рабочая папка не существует
         5 — ошибка при копировании файла
+        6 — не указан ни один файл баллов
 
     Параметры:
-        autumn_points_name — путь к файлу осенних баллов
-        spring_points_name — путь к файлу весенних баллов
+        autumn_points_name — путь к файлу осенних баллов (может быть пустым)
+        spring_points_name — путь к файлу весенних баллов (может быть пустым)
         work_folder_name   — корневая рабочая папка (для удаления при ошибке)
         output_folder_name — папка назначения для файлов баллов
     """
+    # Флаги: пропущен ли каждый из файлов (пользователь оставил поле пустым)
     autumn_skip = True
     spring_skip = True
 
@@ -552,16 +537,17 @@ def preparation_of_points(autumn_points_name : str, spring_points_name : str, wo
     output_folder_path.mkdir(exist_ok=True)  # Создаём подпапку Points, если её нет
 
     if not autumn_points_name.isspace() and autumn_points_name:
+        # Пользователь указал осенний файл — обрабатываем его
         autumn_skip = False
 
-        # Очищаем пути от артефактов терминала
+        # Очищаем путь от артефактов терминала (амперсанды, кавычки, пробелы)
         autumn_points_path = pathlib.Path(autumn_points_name.strip("& ").strip("'\""))
 
         if not autumn_points_path.exists():
             print("Ошибка: Файла осенних баллов не существует")
             shutil.rmtree(work_folder_name)
             return 1
-        
+
         if autumn_points_path.suffix.lower() == ".xlsx":
             # Копируем файл осенних баллов под стандартным именем autumn_points.xlsx
             print("Копирование файла:", autumn_points_path.name)
@@ -577,18 +563,18 @@ def preparation_of_points(autumn_points_name : str, spring_points_name : str, wo
             shutil.rmtree(work_folder_name)
             return 3
 
-    
     if not spring_points_name.isspace() and spring_points_name:
+        # Пользователь указал весенний файл — обрабатываем его
         spring_skip = False
 
-        # Очищаем пути от артефактов терминала
+        # Очищаем путь от артефактов терминала (амперсанды, кавычки, пробелы)
         spring_points_path = pathlib.Path(spring_points_name.strip("& ").strip("'\""))
 
         if not spring_points_path.exists():
             print("Ошибка: Файла весенних баллов не существует")
             shutil.rmtree(work_folder_name)
             return 1
-        
+
         if spring_points_path.suffix.lower() == ".xlsx":
             # Копируем файл весенних баллов под стандартным именем spring_points.xlsx
             print("Копирование файла:", spring_points_path.name)
@@ -603,7 +589,8 @@ def preparation_of_points(autumn_points_name : str, spring_points_name : str, wo
             print("Ошибка: Неверный тип файла:", spring_points_path.name)
             shutil.rmtree(work_folder_name)
             return 3
-        
+
+    # Оба файла пропущены — дальнейшая обработка бессмысленна
     if autumn_skip and spring_skip:
         print("Ошибка: Не указано ни одного файла баллов для обработки.")
         shutil.rmtree(work_folder_name)
@@ -617,7 +604,7 @@ def preparation_of_points(autumn_points_name : str, spring_points_name : str, wo
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def read_department_file(
-    file_path : pathlib.Path,
+    file_path: pathlib.Path,
     department_header_rows_size=DEPARTMENT_HEADER_ROWS_SIZE,
     department_columns=DEPARTMENT_COLUMNS,
     department_teacher_header_name=DEPARTMENT_TEACHER_HEADER_NAME,
@@ -658,8 +645,7 @@ def read_department_file(
     2. Из названия дисциплины удаляются суффиксы ", п/г N" и ", часть N"
        для нормализации (результат сохраняется в поле дисциплины).
        Полное оригинальное название хранится в "Полное название дисциплины".
-    3. У поля "Преподаватель" обрезается первый символ (предположительно
-       служебный символ из исходного Excel-файла).
+    3. У поля "Преподаватель" обрезается первый символ (служебный артефакт Excel).
     4. Каждая новая строка проверяется на возможность объединения
        с уже добавленными записями той же группы:
          - Если обе строки — подгруппы одной дисциплины (суффикс "п/г"):
@@ -697,7 +683,7 @@ def read_department_file(
     except Exception as e:
         print("Ошибка при открытии файла:", file_path.name)
         print("Подробности:", e)
-        return  # None
+        return None
 
     sheet = wb.active
     n = sheet.max_row
@@ -828,7 +814,7 @@ def read_department_file(
 
 
 def read_point_file(
-    file_path : pathlib.Path,
+    file_path: pathlib.Path,
     point_header_rows_size=POINTS_HEADER_ROWS_SIZE,
     points_columns=POINTS_COLUMNS,
     points_group_header_name=POINTS_GROUP_HEADER_NAME,
@@ -859,20 +845,27 @@ def read_point_file(
 
     Каждый балл преобразуется в float через to_float() для единообразия.
 
+    Коды возврата при ошибке:
+        1 — файл не существует (штатная ситуация: файл был пропущен пользователем)
+        2 — файл существует, но не удалось его открыть
+
     Параметры:
-        file_path                 — путь к файлу баллов (.xlsx)
-        point_header_rows_size    — число строк-заголовков в файле
-        points_columns            — маппинг названий столбцов → буквы Excel
-        points_group_header_name  — название столбца с группой
+        file_path                     — путь к файлу баллов (.xlsx)
+        point_header_rows_size        — число строк-заголовков в файле
+        points_columns                — маппинг названий столбцов → буквы Excel
+        points_group_header_name      — название столбца с группой
         points_discipline_header_name — название столбца с дисциплиной
-        points_point_header_name  — название столбца с баллом
-        points_skip_values        — список значений, которые нужно пропустить
+        points_point_header_name      — название столбца с баллом
+        points_skip_values            — список значений, которые нужно пропустить
 
     Возвращает:
-        dict — словарь { группа: { дисциплина: [баллы] } }, или None при ошибке
+        dict — словарь { группа: { дисциплина: [баллы] } }
+        1    — если файл не существует
+        2    — если файл не удалось открыть
     """
     points_dict = {}
 
+    # Файл может не существовать, если пользователь пропустил его при вводе — это нормально
     if not file_path.exists():
         return 1
 
@@ -891,9 +884,9 @@ def read_point_file(
             group = sheet[points_columns[points_group_header_name] + str(i)].value
             discipline = sheet[points_columns[points_discipline_header_name] + str(i)].value
 
-            # Убираем лишние пробелы из названия дисциплины
+            # Убираем лишние пробелы — иначе "Математика " и "Математика" не совпадут при поиске
             if type(discipline) == str:
-                discipline =discipline.strip()
+                discipline = discipline.strip()
 
             points = sheet[points_columns[points_point_header_name] + str(i)].value
 
@@ -944,6 +937,7 @@ def processing(
 
     Алгоритм работы:
     1. Читает файлы осенних и весенних баллов в память (read_point_file).
+       Если файл был пропущен пользователем — помечает его флагом skip.
     2. Для каждого .xlsx-файла из папки DEPARTMENTS_FOLDER:
        а) Читает данные кафедры (read_department_file).
        б) Создаёт новый Excel-файл с заголовками из OUTPUT_COLUMNS.
@@ -951,7 +945,7 @@ def processing(
           - Чётный номер семестра/курса → весенние баллы (spring_points).
           - Нечётный номер → осенние баллы (autumn_points).
        г) Ищет баллы по ключам [группа][дисциплина] в соответствующем словаре.
-       д) Если баллы найдены — записывает количество сдавших и средний балл.
+       д) Если баллы найдены — записывает количество прохождений и средний балл.
        е) Применяет форматирование: жирный заголовок, тонкие границы для всех ячеек.
        ж) Сохраняет файл в OUTPUT_FOLDER с тем же именем, что и файл кафедры.
     3. Возвращает 0 при успехе.
@@ -965,7 +959,7 @@ def processing(
     Параметры:
         departments_folder         — папка с файлами кафедр
         autumn_points_path         — путь к файлу осенних баллов
-        spring_points_path         — путь к файлу весенних баллов (опечатка в имени параметра)
+        spring_points_path         — путь к файлу весенних баллов
         points_folder              — папка с файлами баллов (не используется напрямую)
         output_folder              — папка для сохранения результатов
         output_columns             — маппинг столбцов выходного файла
@@ -985,15 +979,19 @@ def processing(
     spring_points_path = pathlib.Path(spring_points_path)
     departments_path = pathlib.Path(departments_folder)
     output_folder_path = pathlib.Path(output_folder)
+
+    # Флаги: нужно ли пропустить тот или иной файл баллов
     autumn_points_skip = False
     spring_points_skip = False
 
-    # Загружаем оба файла баллов целиком в память — они используются для всех кафедр
+    # Загружаем оба файла баллов целиком в память — они используются для всех кафедр.
+    # Если файл не существует (код возврата 1) — помечаем его как пропущенный.
     autumn_points = read_point_file(autumn_points_path)
     if autumn_points == 1:
         autumn_points_skip = True
     else:
         print("Чтение осенних баллов")
+
     spring_points = read_point_file(spring_points_path)
     if spring_points == 1:
         spring_points_skip = True
@@ -1008,7 +1006,7 @@ def processing(
     except Exception as e:
         print("Ошибка при создании выходной папки:", output_folder)
         print("Подробности:", e)
-        return  # None — сигнал об ошибке
+        return None  # Сигнал об ошибке
 
     # ── Обработка каждого файла кафедры ─────────────────────────────────────
     for department in departments_path.glob("*.xlsx"):
@@ -1030,12 +1028,11 @@ def processing(
             discipline = ""
 
             for group in departments_dict:
-                # Получаем словари баллов для текущей группы (или None, если группы нет в файле баллов)
+                # Получаем словари баллов для текущей группы (None, если группы нет в файле баллов)
                 if not autumn_points_skip:
                     autumn_points_group = autumn_points.get(group)
                 if not spring_points_skip:
                     spring_points_group = spring_points.get(group)
-                
 
                 for record in departments_dict[group]:
                     # Переносим данные из записи кафедры в выходной файл
@@ -1111,11 +1108,11 @@ def main():
     Если любой из этапов завершается с ненулевым кодом возврата —
     выводится сообщение об ошибке и программа завершается.
 
-    Перехватывает KeyboardInterrupt (Ctrl+C) для корректного завершения
-    вместо вывода трейсбека Python.
+    Перехватывает KeyboardInterrupt (Ctrl+C) и любые непредвиденные исключения
+    для корректного завершения вместо вывода трейсбека Python.
 
     Все этапы запрашивают пути к файлам у пользователя через input().
-    После завершения (успешного или с ошибкой) программа ждёт нажатия Enter,
+    После завершения (успешного или с ошибкой) программа ждёт нажатия клавиши,
     чтобы окно терминала не закрылось автоматически (актуально при запуске
     двойным кликом в Windows).
     """
@@ -1126,6 +1123,7 @@ def main():
             sys.exit()
 
         # Этап 2: подготовка файлов баллов
+        # Каждый из двух файлов можно пропустить, нажав Enter
         if preparation_of_points(
             input("\nВведите путь к файлу осенних баллов (нажмите Enter, чтобы пропустить): "),
             input("Введите путь к файлу весенних баллов (нажмите Enter, чтобы пропустить): ")
