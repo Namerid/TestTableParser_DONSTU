@@ -5,7 +5,7 @@ import shutil
 import sys
 from pprint import pprint
 import re
-import json
+# import json
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -211,36 +211,36 @@ PATTERN = r"(?:,\s*п/г\s*\d+)?(?:,\s*часть\s*\d+)?$"
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def save_to_json(data, file_path: str | pathlib.Path, indent: int = 2):
-    """
-    Сохраняет произвольные данные (словарь, список и т.д.) в JSON-файл.
+# def save_to_json(data, file_path: str | pathlib.Path, indent: int = 2):
+#     r"""
+#     Cохраняет произвольные данные (словарь, список и т.д.) в JSON-файл.
 
-    Особенности:
-    - Автоматически создаёт все недостающие родительские директории.
-    - Кириллица сохраняется как есть (ensure_ascii=False), не в виде \uXXXX.
-    - Ключи сортируются по алфавиту для удобного сравнения файлов.
-    - Отступы задаются параметром indent (по умолчанию 2 пробела).
+#     Особенности:
+#     - Автоматически создаёт все недостающие родительские директории.
+#     - Кириллица сохраняется как есть (ensure_ascii=False), не в виде '\uXXXX.
+#     - Ключи сортируются по алфавиту для удобного сравнения файлов.
+#     - Отступы задаются параметром indent (по умолчанию 2 пробела).
 
-    Используется преимущественно для отладки: позволяет сохранить
-    промежуточный словарь departments_dict и просмотреть его структуру.
+#     Используется преимущественно для отладки: позволяет сохранить
+#     промежуточный словарь departments_dict и просмотреть его структуру.
 
-    Параметры:
-        data      — данные для сериализации
-        file_path — путь к выходному файлу (str или pathlib.Path)
-        indent    — количество пробелов для отступа в JSON
-    """
-    file_path = pathlib.Path(file_path)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
+#     Параметры:
+#         data      — данные для сериализации
+#         file_path — путь к выходному файлу (str или pathlib.Path)
+#         indent    — количество пробелов для отступа в JSON
+#     """
+#     file_path = pathlib.Path(file_path)
+#     file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(
-            data,
-            f,
-            ensure_ascii=False,  # Сохраняем кириллицу напрямую, не экранируем
-            indent=indent,       # Красивое форматирование с отступами
-            sort_keys=True       # Сортировка ключей для удобного чтения
-        )
-    print(f"JSON сохранён: {file_path}")
+#     with open(file_path, 'w', encoding='utf-8') as f:
+#         json.dump(
+#             data,
+#             f,
+#             ensure_ascii=False,  # Сохраняем кириллицу напрямую, не экранируем
+#             indent=indent,       # Красивое форматирование с отступами
+#             sort_keys=True       # Сортировка ключей для удобного чтения
+#         )
+#     print(f"JSON сохранён: {file_path}")
 
 
 def to_float(value: str | float | int):
@@ -301,7 +301,7 @@ def to_int(value: str | int):
 
 
 def recreate_work_folder(output_folder_name):
-    """
+    '''
     Пересоздаёт папку по указанному пути: удаляет её вместе со всем содержимым
     (если существует), затем создаёт заново пустой.
 
@@ -313,7 +313,7 @@ def recreate_work_folder(output_folder_name):
 
     Возвращает:
         pathlib.Path — объект созданной папки
-    """
+    '''
     if pathlib.Path(output_folder_name).exists():
         shutil.rmtree(output_folder_name)  # Удаляем папку рекурсивно
 
@@ -357,11 +357,11 @@ def remove_suffixes(text: str, pattern: str) -> str:
 
 
 def end_check(text: str, pattern: str) -> bool:
-    """
+    r"""
     Проверяет, оканчивается ли строка на подстроку, соответствующую шаблону.
 
     Используется для определения типа суффикса в названии дисциплины:
-    - r"[,\s]*п/г\s*\d+$"        — строка оканчивается на обозначение подгруппы
+    - r"[,\s]*п/г\\s*\d+$"        — строка оканчивается на обозначение подгруппы
     - r"часть(?:_к)?\s*\d+$"     — строка оканчивается на обозначение части
 
     Это позволяет принять решение: нужно ли объединять две строки кафедры
@@ -385,7 +385,7 @@ def end_check(text: str, pattern: str) -> bool:
 # ФУНКЦИИ ПОДГОТОВКИ ДАННЫХ
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def preparation_of_departments(departments_name, work_folder_name=WORK_FOLDER, output_folder_name=DEPARTMENTS_FOLDER):
+def preparation_of_departments(departments_name : str, work_folder_name=WORK_FOLDER, output_folder_name=DEPARTMENTS_FOLDER) -> int:
     """
     Подготавливает файлы кафедр к обработке: копирует .xlsx-файлы
     и конвертирует .xls-файлы в .xlsx, помещая результат в DEPARTMENTS_FOLDER.
@@ -497,7 +497,7 @@ def preparation_of_departments(departments_name, work_folder_name=WORK_FOLDER, o
     return 0
 
 
-def preparation_of_points(autumn_points_name, spring_points_name, work_folder_name=WORK_FOLDER, output_folder_name=POINTS_FOLDER):
+def preparation_of_points(autumn_points_name : str, spring_points_name : str, work_folder_name=WORK_FOLDER, output_folder_name=POINTS_FOLDER) -> int:
     """
     Подготавливает файлы баллов к обработке: копирует осенний и весенний
     файлы в рабочую папку POINTS_FOLDER под стандартизированными именами.
@@ -573,7 +573,7 @@ def preparation_of_points(autumn_points_name, spring_points_name, work_folder_na
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def read_department_file(
-    file_path,
+    file_path : pathlib.Path,
     department_header_rows_size=DEPARTMENT_HEADER_ROWS_SIZE,
     department_columns=DEPARTMENT_COLUMNS,
     department_teacher_header_name=DEPARTMENT_TEACHER_HEADER_NAME,
@@ -784,7 +784,7 @@ def read_department_file(
 
 
 def read_point_file(
-    file_path,
+    file_path : pathlib.Path,
     point_header_rows_size=POINTS_HEADER_ROWS_SIZE,
     points_columns=POINTS_COLUMNS,
     points_group_header_name=POINTS_GROUP_HEADER_NAME,
@@ -845,10 +845,8 @@ def read_point_file(
             discipline = sheet[points_columns[points_discipline_header_name] + str(i)].value
 
             # Убираем лишние пробелы из названия дисциплины
-            # Внимание: здесь баг — strip() возвращает новую строку, но результат не сохраняется.
-            # Правильно: discipline = discipline.strip() (если discipline is not None)
             if type(discipline) == str:
-                discipline.strip()  # BUG: результат не присваивается переменной
+                discipline =discipline.strip()
 
             points = sheet[points_columns[points_point_header_name] + str(i)].value
 
@@ -882,7 +880,7 @@ def read_point_file(
 def processing(
     departments_folder=DEPARTMENTS_FOLDER,
     autumn_points_path=AUTUMN_POINTS_PATH,
-    sprint_points_path=SPRING_POINTS_PATH,
+    spring_points_path=SPRING_POINTS_PATH,
     points_folder=POINTS_FOLDER,
     output_folder=OUTPUT_FOLDER,
     output_columns=OUTPUT_COLUMNS,
@@ -920,7 +918,7 @@ def processing(
     Параметры:
         departments_folder         — папка с файлами кафедр
         autumn_points_path         — путь к файлу осенних баллов
-        sprint_points_path         — путь к файлу весенних баллов (опечатка в имени параметра)
+        spring_points_path         — путь к файлу весенних баллов (опечатка в имени параметра)
         points_folder              — папка с файлами баллов (не используется напрямую)
         output_folder              — папка для сохранения результатов
         output_columns             — маппинг столбцов выходного файла
@@ -937,7 +935,7 @@ def processing(
     print("\nОсновная обработка данных начата...")
 
     autumn_points_path = pathlib.Path(autumn_points_path)
-    spring_points_path = pathlib.Path(sprint_points_path)
+    spring_points_path = pathlib.Path(spring_points_path)
     departments_path = pathlib.Path(departments_folder)
     output_folder_path = pathlib.Path(output_folder)
 
@@ -1079,14 +1077,19 @@ def main():
 
         # Этап 3: основная обработка
         if processing() != 0:
-            input("\nОшибка при обработке данных. Завершение работы. Нажмите Enter для выхода...")
+            input("\nОшибка при обработке данных. Завершение работы. Нажмите любую клавишу для выхода...")
             sys.exit()
         else:
-            input("\nОбработка завершена. Нажмите Enter для выхода...")
+            input("\nОбработка завершена. Нажмите любую клавишу для выхода...")
 
     except KeyboardInterrupt:
         # Пользователь прервал выполнение через Ctrl+C
-        input("\nРабота прервана пользователем. Завершение работы. Нажмите Enter для выхода...")
+        input("\nРабота прервана пользователем. Завершение работы. Нажмите любую клавишу для выхода...")
+        sys.exit()
+    except Exception as e:
+        # Ловим любые другие неожиданные ошибки
+        print("\nОшибка:", e)
+        input("Завершение работы. Нажмите любую клавишу для выхода...")
         sys.exit()
 
 
