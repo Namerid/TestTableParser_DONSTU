@@ -538,9 +538,9 @@ def preparation_of_points(autumn_points_name : str, spring_points_name : str, wo
         work_folder_name   — корневая рабочая папка (для удаления при ошибке)
         output_folder_name — папка назначения для файлов баллов
     """
-    # Очищаем пути от артефактов терминала
-    autumn_points_path = pathlib.Path(autumn_points_name.strip("& ").strip("'\""))
-    spring_points_path = pathlib.Path(spring_points_name.strip("& ").strip("'\""))
+    autumn_skip = True
+    spring_skip = True
+
     output_folder_path = pathlib.Path(output_folder_name)
 
     # Проверяем, что родительская рабочая папка уже создана (должна быть создана ранее)
@@ -551,35 +551,63 @@ def preparation_of_points(autumn_points_name : str, spring_points_name : str, wo
 
     output_folder_path.mkdir(exist_ok=True)  # Создаём подпапку Points, если её нет
 
-    if not autumn_points_path.exists() or not spring_points_path.exists():
-        print("Ошибка: Файла не существует")
-        shutil.rmtree(work_folder_name)
-        return 1
+    if not autumn_points_name.isspace() and autumn_points_name:
+        autumn_skip = False
 
-    if autumn_points_path.suffix.lower() == ".xlsx" and spring_points_path.suffix.lower() == ".xlsx":
-        # Копируем файл осенних баллов под стандартным именем autumn_points.xlsx
-        print("Копирование файла:", autumn_points_path.name)
-        try:
-            shutil.copy(autumn_points_path, f'{str(output_folder_path)}\\{AUTUMN_POINTS_NAME}')
-        except Exception as e:
-            print("Ошибка при копировании файла:", autumn_points_path.name)
-            print("Подробности:", e)
-            shutil.rmtree(work_folder_name)
-            return 5
+        # Очищаем пути от артефактов терминала
+        autumn_points_path = pathlib.Path(autumn_points_name.strip("& ").strip("'\""))
 
-        # Копируем файл весенних баллов под стандартным именем spring_points.xlsx
-        print("Копирование файла:", spring_points_path.name)
-        try:
-            shutil.copy(spring_points_path, f'{str(output_folder_path)}\\{SPRING_POINTS_NAME}')
-        except Exception as e:
-            print("Ошибка при копировании файла:", spring_points_path.name)
-            print("Подробности:", e)
+        if not autumn_points_path.exists():
+            print("Ошибка: Файла осенних баллов не существует")
             shutil.rmtree(work_folder_name)
-            return 5
-    else:
-        print("Ошибка: Неверный тип файла.")
+            return 1
+        
+        if autumn_points_path.suffix.lower() == ".xlsx":
+            # Копируем файл осенних баллов под стандартным именем autumn_points.xlsx
+            print("Копирование файла:", autumn_points_path.name)
+            try:
+                shutil.copy(autumn_points_path, f'{str(output_folder_path)}\\{AUTUMN_POINTS_NAME}')
+            except Exception as e:
+                print("Ошибка при копировании файла:", autumn_points_path.name)
+                print("Подробности:", e)
+                shutil.rmtree(work_folder_name)
+                return 5
+        else:
+            print("Ошибка: Неверный тип файла:", autumn_points_path.name)
+            shutil.rmtree(work_folder_name)
+            return 3
+
+    
+    if not spring_points_name.isspace() and spring_points_name:
+        spring_skip = False
+
+        # Очищаем пути от артефактов терминала
+        spring_points_path = pathlib.Path(spring_points_name.strip("& ").strip("'\""))
+
+        if not spring_points_path.exists():
+            print("Ошибка: Файла весенних баллов не существует")
+            shutil.rmtree(work_folder_name)
+            return 1
+        
+        if spring_points_path.suffix.lower() == ".xlsx":
+            # Копируем файл весенних баллов под стандартным именем spring_points.xlsx
+            print("Копирование файла:", spring_points_path.name)
+            try:
+                shutil.copy(spring_points_path, f'{str(output_folder_path)}\\{SPRING_POINTS_NAME}')
+            except Exception as e:
+                print("Ошибка при копировании файла:", spring_points_path.name)
+                print("Подробности:", e)
+                shutil.rmtree(work_folder_name)
+                return 5
+        else:
+            print("Ошибка: Неверный тип файла:", spring_points_path.name)
+            shutil.rmtree(work_folder_name)
+            return 3
+        
+    if autumn_skip and spring_skip:
+        print("Ошибка: Не указано ни одного файла баллов для обработки.")
         shutil.rmtree(work_folder_name)
-        return 3
+        return 6
 
     return 0
 
@@ -845,12 +873,15 @@ def read_point_file(
     """
     points_dict = {}
 
+    if not file_path.exists():
+        return 1
+
     try:
         wb = openpyxl.load_workbook(file_path)
     except Exception as e:
         print("Ошибка при открытии файла:", file_path.name)
         print("Подробности:", e)
-        return  # None
+        return 2
 
     sheet = wb.active
     n = sheet.max_row
@@ -954,12 +985,20 @@ def processing(
     spring_points_path = pathlib.Path(spring_points_path)
     departments_path = pathlib.Path(departments_folder)
     output_folder_path = pathlib.Path(output_folder)
+    autumn_points_skip = False
+    spring_points_skip = False
 
     # Загружаем оба файла баллов целиком в память — они используются для всех кафедр
     autumn_points = read_point_file(autumn_points_path)
-    print("Чтение осенних баллов")
+    if autumn_points == 1:
+        autumn_points_skip = True
+    else:
+        print("Чтение осенних баллов")
     spring_points = read_point_file(spring_points_path)
-    print("Чтение весенних баллов\n")
+    if spring_points == 1:
+        spring_points_skip = True
+    else:
+        print("Чтение весенних баллов\n")
 
     # Пересоздаём выходную папку (удаляем старые результаты)
     try:
@@ -992,8 +1031,11 @@ def processing(
 
             for group in departments_dict:
                 # Получаем словари баллов для текущей группы (или None, если группы нет в файле баллов)
-                spring_points_group = spring_points.get(group)
-                autumn_points_group = autumn_points.get(group)
+                if not autumn_points_skip:
+                    autumn_points_group = autumn_points.get(group)
+                if not spring_points_skip:
+                    spring_points_group = spring_points.get(group)
+                
 
                 for record in departments_dict[group]:
                     # Переносим данные из записи кафедры в выходной файл
@@ -1009,14 +1051,14 @@ def processing(
                         if course[-1].isdigit() and course[-1] != 0:
                             course_num = int(course[-1])
 
-                            if course_num % 2 == 0:
+                            if course_num % 2 == 0 and not spring_points_skip:
                                 # Чётный семестр → ищем в весенних баллах
                                 if spring_points_group is not None:
                                     points = spring_points_group.get(discipline)
                                     if points is not None:
                                         sheet[output_columns[output_passed_header_name] + str(row_index)] = str(len(points))
                                         sheet[output_columns[output_average_header_name] + str(row_index)] = f"{sum(points) / len(points):.2f}"
-                            else:
+                            elif not autumn_points_skip:
                                 # Нечётный семестр → ищем в осенних баллах
                                 if autumn_points_group is not None:
                                     points = autumn_points_group.get(discipline)
@@ -1085,8 +1127,8 @@ def main():
 
         # Этап 2: подготовка файлов баллов
         if preparation_of_points(
-            input("\nВведите путь к файлу осенних баллов: "),
-            input("Введите путь к файлу весенних баллов: ")
+            input("\nВведите путь к файлу осенних баллов (нажмите Enter, чтобы пропустить): "),
+            input("Введите путь к файлу весенних баллов (нажмите Enter, чтобы пропустить): ")
         ) != 0:
             input("\nОшибка при подготовке файлов баллов. Завершение работы. Нажмите любую клавишу для выхода...")
             sys.exit()
