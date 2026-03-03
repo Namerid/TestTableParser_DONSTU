@@ -183,8 +183,12 @@ POINTS_HEADER_ROWS_SIZE = 1
 
 # Словарь, сопоставляющий названия столбцов итогового файла их буквенным индексам.
 # Первые 8 столбцов (A–H) переносятся из файла кафедры без изменений.
-# Столбцы I и J ("Количество прохождений", "Средний балл") рассчитываются
-# по данным из файлов баллов.
+# Столбцы I–M рассчитываются по данным из файлов баллов:
+#   I — сколько уникальных студентов прошли тест хотя бы раз
+#   J — доля прошедших от общего числа студентов в группе
+#   K — средний балл по наилучшей попытке каждого студента
+#   L — суммарное количество всех попыток по дисциплине
+#   M — средний балл по всем попыткам без отбора
 OUTPUT_COLUMNS = {
     "Учебный план": "A",
     "Факультет группы": "B",
@@ -194,11 +198,11 @@ OUTPUT_COLUMNS = {
     "Количество студентов": "F",
     "Вид занятий": "G",
     "Преподаватель": "H",
-    "Количество прошедших": "I", 
+    "Количество прошедших": "I",
     "Доля прошедших": "J",
-    "Средний балл по наибольшим": "K", 
-    "Количество попыток": "L",  
-    "Средний балл по всем попыткам": "M"          
+    "Средний балл по наибольшим": "K",
+    "Количество попыток": "L",
+    "Средний балл по всем попыткам": "M"
 }
 
 OUTPUT_PASSED_HEADER_NAME = "Количество прошедших"
@@ -543,6 +547,13 @@ def preparation_of_points(autumn_points_name: str, spring_points_name: str, work
 
     output_folder_path.mkdir(exist_ok=True)  # Создаём подпапку Points, если её нет
 
+    #Перед копированием очищаем папку от старых файлов, чтобы избежать путаницы
+    for item in output_folder_path.iterdir():
+        if item.is_file() or item.is_symlink():
+            item.unlink()
+        elif item.is_dir():
+            shutil.rmtree(item)
+    
     if not autumn_points_name.isspace() and autumn_points_name:
         # Пользователь указал осенний файл — обрабатываем его
         autumn_skip = False
@@ -833,23 +844,26 @@ def read_point_file(
     """
     Читает файл баллов и возвращает словарь с результатами тестирования.
 
+    Структура изменилась по сравнению с предыдущей версией: теперь баллы
+    группируются не просто по дисциплине, а внутри дисциплины — ещё и по студенту.
+    Это позволяет в дальнейшем корректно считать статистику:
+    отбирать наилучшую попытку каждого студента и считать средние независимо.
+
     Возвращаемая структура:
         {
             "ИТ-21": {
-                "Математика": [85.0, 72.0, 91.0, ...],
-                "Физика":     [60.0, 78.0, ...],
+                "Математика": {
+                    "Иванов И.И.": [85.0, 90.0],   ← все попытки студента
+                    "Петров П.П.": [72.0],
+                    ...
+                },
                 ...
             },
-            "ИТ-22": { ... },
             ...
         }
 
-    Ключ первого уровня — название группы.
-    Ключ второго уровня — название дисциплины.
-    Значение — список всех баллов студентов группы по данной дисциплине.
-
     Строки со значениями из POINTS_SKIP_VALUES (None, "", "безоценочно")
-    в любом из трёх столбцов (группа, дисциплина, балл) пропускаются.
+    в любом из четырёх столбцов (группа, ФИО, дисциплина, балл) пропускаются.
 
     Каждый балл преобразуется в float через to_float() для единообразия.
 
@@ -862,12 +876,13 @@ def read_point_file(
         point_header_rows_size        — число строк-заголовков в файле
         points_columns                — маппинг названий столбцов → буквы Excel
         points_group_header_name      — название столбца с группой
+        points_name_header_name       — название столбца с ФИО студента
         points_discipline_header_name — название столбца с дисциплиной
         points_point_header_name      — название столбца с баллом
         points_skip_values            — список значений, которые нужно пропустить
 
     Возвращает:
-        dict — словарь { группа: { дисциплина: [баллы] } }
+        dict — словарь { группа: { дисциплина: { ФИО: [баллы] } } }
         1    — если файл не существует
         2    — если файл не удалось открыть
     """
@@ -898,7 +913,7 @@ def read_point_file(
             if type(discipline) == str:
                 discipline = discipline.strip()
 
-            # Пропускаем строки, где группа, дисциплина или балл отсутствуют/недопустимы
+            # Пропускаем строки, где группа, ФИО, дисциплина или балл отсутствуют/недопустимы
             if not (group in points_skip_values or
                     name in points_skip_values or
                     discipline in points_skip_values or
@@ -910,6 +925,7 @@ def read_point_file(
                 if discipline not in points_dict[group]:
                     points_dict[group][discipline] = {}
 
+                # Каждому студенту соответствует список его баллов по данной дисциплине
                 if name not in points_dict[group][discipline]:
                     points_dict[group][discipline][name] = []
 
@@ -945,8 +961,7 @@ def processing(
     output_average_all_header_name=OUTPUT_AVERAGE_ALL_HEADER_NAME,
     department_discipline_header_name=DEPARTMENT_DISCIPLINE_HEADER_NAME,
     department_course_header_name=DEPARTMENT_COURSE_HEADER_NAME,
-    department_number_of_students_header_name = DEPARTMENT_NUMBER_OF_STUDENTS_HEADER_NAME
-    
+    department_number_of_students_header_name=DEPARTMENT_NUMBER_OF_STUDENTS_HEADER_NAME
 ):
     """
     Основная функция обработки данных. Объединяет данные кафедр и баллов,
@@ -962,7 +977,12 @@ def processing(
           - Чётный номер семестра/курса → весенние баллы (spring_points).
           - Нечётный номер → осенние баллы (autumn_points).
        г) Ищет баллы по ключам [группа][дисциплина] в соответствующем словаре.
-       д) Если баллы найдены — записывает количество прохождений и средний балл.
+       д) Если баллы найдены — вычисляет и записывает пять показателей:
+          - количество уникальных студентов, прошедших тест;
+          - долю прошедших от числа студентов в группе;
+          - средний балл по наилучшей попытке каждого студента;
+          - суммарное количество всех попыток;
+          - средний балл по всем попыткам без отбора.
        е) Применяет форматирование: жирный заголовок, тонкие границы для всех ячеек.
        ж) Сохраняет файл в OUTPUT_FOLDER с тем же именем, что и файл кафедры.
     3. Возвращает 0 при успехе.
@@ -974,18 +994,22 @@ def processing(
             нечётная → осень (семестры 1, 3, 5, 7)
 
     Параметры:
-        departments_folder         — папка с файлами кафедр
-        autumn_points_path         — путь к файлу осенних баллов
-        spring_points_path         — путь к файлу весенних баллов
-        points_folder              — папка с файлами баллов (не используется напрямую)
-        output_folder              — папка для сохранения результатов
-        output_columns             — маппинг столбцов выходного файла
-        output_header_rows_size    — число строк-заголовков в выходном файле
-        output_columns_write_list  — список столбцов, переносимых из файла кафедры
-        output_passed_header_name  — название столбца "Количество прохождений"
-        output_average_header_name — название столбца "Средний балл"
-        department_course_header_name     — название столбца с курсом/семестром
-        department_discipline_header_name — название столбца с дисциплиной
+        departments_folder                        — папка с файлами кафедр
+        autumn_points_path                        — путь к файлу осенних баллов
+        spring_points_path                        — путь к файлу весенних баллов
+        points_folder                             — папка с файлами баллов (не используется напрямую)
+        output_folder                             — папка для сохранения результатов
+        output_columns                            — маппинг столбцов выходного файла
+        output_header_rows_size                   — число строк-заголовков в выходном файле
+        output_columns_write_list                 — список столбцов, переносимых из файла кафедры
+        output_passed_header_name                 — название столбца "Количество прошедших"
+        output_proportion_header_name             — название столбца "Доля прошедших"
+        output_average_max_header_name            — название столбца "Средний балл по наибольшим"
+        output_attempts_header_name               — название столбца "Количество попыток"
+        output_average_all_header_name            — название столбца "Средний балл по всем попыткам"
+        department_discipline_header_name         — название столбца с дисциплиной
+        department_course_header_name             — название столбца с курсом/семестром
+        department_number_of_students_header_name — название столбца с числом студентов
 
     Возвращает:
         0 при успехе, None при ошибке создания выходной папки
@@ -1069,28 +1093,30 @@ def processing(
                             points_dic = spring_points_group.get(discipline)
                             if points_dic is not None:
                                 points = points_dic.values()  # Получаем словари по студентам, затем их значения (списки баллов)
-                                max_points = [max(row) for row in points]
-                                all_points = [x for row in points for x in row]
-                                
+                                max_points = [max(row) for row in points if None not in row]       # Лучший балл каждого студента
+                                all_points = [x for row in points for x in row if x is not None] # Все попытки всех студентов в одном списке
+
                                 sheet[output_columns[output_passed_header_name] + str(row_index)] = str(len(max_points))
-                                sheet[output_columns[output_proportion_header_name] + str(row_index)] = f"{len(max_points) / to_int(record[department_number_of_students_header_name]):.2%}"
-                                sheet[output_columns[output_average_max_header_name] + str(row_index)] = f"{sum(max_points) / len(max_points):.2f}"
+                                number_of_students = to_int(record[department_number_of_students_header_name])
+                                sheet[output_columns[output_proportion_header_name] + str(row_index)] = f"{(len(max_points) / number_of_students) if number_of_students > 0 else 0:.2%}"
+                                sheet[output_columns[output_average_max_header_name] + str(row_index)] = f"{sum(max_points) / len(max_points) if len(max_points) > 0 else 0:.2f}"
                                 sheet[output_columns[output_attempts_header_name] + str(row_index)] = str(len(all_points))
-                                sheet[output_columns[output_average_all_header_name] + str(row_index)] = f"{sum(all_points) / len(all_points):.2f}"
+                                sheet[output_columns[output_average_all_header_name] + str(row_index)] = f"{sum(all_points) / len(all_points) if len(all_points) > 0 else 0:.2f}"
+
                         elif not autumn_points_skip and autumn_points_group is not None:
                             # Нечётный семестр → ищем в осенних баллах
                             points_dic = autumn_points_group.get(discipline)
                             if points_dic is not None:
-                            
                                 points = points_dic.values()
-                                max_points = [max(row) for row in points]  # Берём максимум из каждой строки (студента)
-                                all_points = [x for row in points for x in row]
+                                max_points = [max(row) for row in points if None not in row]       # Лучший балл каждого студента
+                                all_points = [x for row in points for x in row if x is not None] # Все попытки всех студентов в одном списке
 
                                 sheet[output_columns[output_passed_header_name] + str(row_index)] = str(len(max_points))
-                                sheet[output_columns[output_proportion_header_name] + str(row_index)] = f"{len(max_points) / to_int(record[department_number_of_students_header_name]):.2%}"
-                                sheet[output_columns[output_average_max_header_name] + str(row_index)] = f"{sum(max_points) / len(max_points):.2f}"                                
+                                number_of_students = to_int(record[department_number_of_students_header_name])
+                                sheet[output_columns[output_proportion_header_name] + str(row_index)] = f"{len(max_points) / number_of_students if number_of_students > 0 else 0:.2%}"
+                                sheet[output_columns[output_average_max_header_name] + str(row_index)] = f"{sum(max_points) / len(max_points) if len(max_points) > 0 else 0:.2f}"
                                 sheet[output_columns[output_attempts_header_name] + str(row_index)] = str(len(all_points))
-                                sheet[output_columns[output_average_all_header_name] + str(row_index)] = f"{sum(all_points) / len(all_points):.2f}"
+                                sheet[output_columns[output_average_all_header_name] + str(row_index)] = f"{sum(all_points) / len(all_points) if len(all_points) > 0 else 0:.2f}"
 
                     row_index += 1
 
