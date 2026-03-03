@@ -3,7 +3,7 @@ import pandas as pd
 import pathlib
 import shutil
 import sys
-from pprint import pprint
+# from pprint import pprint
 import re
 # import json
 
@@ -164,6 +164,7 @@ POINTS_COLUMNS = {
 
 # Названия ключевых столбцов файла баллов
 POINTS_GROUP_HEADER_NAME = "группа"
+POINTS_NAME_HEADER_NAME = "ФИО"
 POINTS_DISCIPLINE_HEADER_NAME = "дисциплина"
 POINTS_POINT_HEADER_NAME = "балл"
 
@@ -193,12 +194,18 @@ OUTPUT_COLUMNS = {
     "Количество студентов": "F",
     "Вид занятий": "G",
     "Преподаватель": "H",
-    "Количество прохождений": "I",  # Заполняется из файла баллов
-    "Средний балл": "J"             # Считается как среднее по всем баллам группы
+    "Количество прошедших": "I", 
+    "Доля прошедших": "J",
+    "Средний балл по наибольшим": "K", 
+    "Количество попыток": "L",  
+    "Средний балл по всем попыткам": "M"          
 }
 
-OUTPUT_PASSED_HEADER_NAME = "Количество прохождений"
-OUTPUT_AVERAGE_HEADER_NAME = "Средний балл"
+OUTPUT_PASSED_HEADER_NAME = "Количество прошедших"
+OUTPUT_PROPORTION_HEADER_NAME = "Доля прошедших"
+OUTPUT_AVERAGE_MAX_HEADER_NAME = "Средний балл по наибольшим"
+OUTPUT_ATTEMPTS_HEADER_NAME = "Количество попыток"
+OUTPUT_AVERAGE_ALL_HEADER_NAME = "Средний балл по всем попыткам"
 
 # Список столбцов, которые копируются из файла кафедры в выходной файл напрямую
 OUTPUT_COLUMNS_WRITE_LIST = [
@@ -818,6 +825,7 @@ def read_point_file(
     point_header_rows_size=POINTS_HEADER_ROWS_SIZE,
     points_columns=POINTS_COLUMNS,
     points_group_header_name=POINTS_GROUP_HEADER_NAME,
+    points_name_header_name=POINTS_NAME_HEADER_NAME,
     points_discipline_header_name=POINTS_DISCIPLINE_HEADER_NAME,
     points_point_header_name=POINTS_POINT_HEADER_NAME,
     points_skip_values=POINTS_SKIP_VALUES
@@ -882,16 +890,17 @@ def read_point_file(
     for i in range(point_header_rows_size + 1, n):
         try:
             group = sheet[points_columns[points_group_header_name] + str(i)].value
+            name = sheet[points_columns[points_name_header_name] + str(i)].value
             discipline = sheet[points_columns[points_discipline_header_name] + str(i)].value
+            points = sheet[points_columns[points_point_header_name] + str(i)].value
 
             # Убираем лишние пробелы — иначе "Математика " и "Математика" не совпадут при поиске
             if type(discipline) == str:
                 discipline = discipline.strip()
 
-            points = sheet[points_columns[points_point_header_name] + str(i)].value
-
             # Пропускаем строки, где группа, дисциплина или балл отсутствуют/недопустимы
             if not (group in points_skip_values or
+                    name in points_skip_values or
                     discipline in points_skip_values or
                     points in points_skip_values):
 
@@ -899,10 +908,13 @@ def read_point_file(
                     points_dict[group] = {}
 
                 if discipline not in points_dict[group]:
-                    points_dict[group][discipline] = []
+                    points_dict[group][discipline] = {}
+
+                if name not in points_dict[group][discipline]:
+                    points_dict[group][discipline][name] = []
 
                 # Добавляем балл в список, приводя к float
-                points_dict[group][discipline].append(to_float(points))
+                points_dict[group][discipline][name].append(to_float(points))
 
         except Exception as e:
             # Ошибка в строке не прерывает обработку — пропускаем и идём дальше
@@ -927,9 +939,14 @@ def processing(
     output_header_rows_size=OUTPUT_HEADER_ROWS_SIZE,
     output_columns_write_list=OUTPUT_COLUMNS_WRITE_LIST,
     output_passed_header_name=OUTPUT_PASSED_HEADER_NAME,
-    output_average_header_name=OUTPUT_AVERAGE_HEADER_NAME,
+    output_proportion_header_name=OUTPUT_PROPORTION_HEADER_NAME,
+    output_average_max_header_name=OUTPUT_AVERAGE_MAX_HEADER_NAME,
+    output_attempts_header_name=OUTPUT_ATTEMPTS_HEADER_NAME,
+    output_average_all_header_name=OUTPUT_AVERAGE_ALL_HEADER_NAME,
+    department_discipline_header_name=DEPARTMENT_DISCIPLINE_HEADER_NAME,
     department_course_header_name=DEPARTMENT_COURSE_HEADER_NAME,
-    department_discipline_header_name=DEPARTMENT_DISCIPLINE_HEADER_NAME
+    department_number_of_students_header_name = DEPARTMENT_NUMBER_OF_STUDENTS_HEADER_NAME
+    
 ):
     """
     Основная функция обработки данных. Объединяет данные кафедр и баллов,
@@ -1044,24 +1061,36 @@ def processing(
                     course = record[department_course_header_name]
 
                     # Определяем семестр и ищем баллы только если есть курс и дисциплина
-                    if len(course) > 0 and discipline != "":
-                        if course[-1].isdigit() and course[-1] != 0:
-                            course_num = int(course[-1])
+                    if len(course) > 0 and discipline != "" and course[-1].isdigit() and course[-1] != 0:
+                        course_num = int(course[-1])
 
-                            if course_num % 2 == 0 and not spring_points_skip:
-                                # Чётный семестр → ищем в весенних баллах
-                                if spring_points_group is not None:
-                                    points = spring_points_group.get(discipline)
-                                    if points is not None:
-                                        sheet[output_columns[output_passed_header_name] + str(row_index)] = str(len(points))
-                                        sheet[output_columns[output_average_header_name] + str(row_index)] = f"{sum(points) / len(points):.2f}"
-                            elif not autumn_points_skip:
-                                # Нечётный семестр → ищем в осенних баллах
-                                if autumn_points_group is not None:
-                                    points = autumn_points_group.get(discipline)
-                                    if points is not None:
-                                        sheet[output_columns[output_passed_header_name] + str(row_index)] = str(len(points))
-                                        sheet[output_columns[output_average_header_name] + str(row_index)] = f"{sum(points) / len(points):.2f}"
+                        if course_num % 2 == 0 and not spring_points_skip and spring_points_group is not None:
+                            # Чётный семестр → ищем в весенних баллах
+                            points_dic = spring_points_group.get(discipline)
+                            if points_dic is not None:
+                                points = points_dic.values()  # Получаем словари по студентам, затем их значения (списки баллов)
+                                max_points = [max(row) for row in points]
+                                all_points = [x for row in points for x in row]
+                                
+                                sheet[output_columns[output_passed_header_name] + str(row_index)] = str(len(max_points))
+                                sheet[output_columns[output_proportion_header_name] + str(row_index)] = f"{len(max_points) / to_int(record[department_number_of_students_header_name]):.2%}"
+                                sheet[output_columns[output_average_max_header_name] + str(row_index)] = f"{sum(max_points) / len(max_points):.2f}"
+                                sheet[output_columns[output_attempts_header_name] + str(row_index)] = str(len(all_points))
+                                sheet[output_columns[output_average_all_header_name] + str(row_index)] = f"{sum(all_points) / len(all_points):.2f}"
+                        elif not autumn_points_skip and autumn_points_group is not None:
+                            # Нечётный семестр → ищем в осенних баллах
+                            points_dic = autumn_points_group.get(discipline)
+                            if points_dic is not None:
+                            
+                                points = points_dic.values()
+                                max_points = [max(row) for row in points]  # Берём максимум из каждой строки (студента)
+                                all_points = [x for row in points for x in row]
+
+                                sheet[output_columns[output_passed_header_name] + str(row_index)] = str(len(max_points))
+                                sheet[output_columns[output_proportion_header_name] + str(row_index)] = f"{len(max_points) / to_int(record[department_number_of_students_header_name]):.2%}"
+                                sheet[output_columns[output_average_max_header_name] + str(row_index)] = f"{sum(max_points) / len(max_points):.2f}"                                
+                                sheet[output_columns[output_attempts_header_name] + str(row_index)] = str(len(all_points))
+                                sheet[output_columns[output_average_all_header_name] + str(row_index)] = f"{sum(all_points) / len(all_points):.2f}"
 
                     row_index += 1
 
